@@ -1,64 +1,64 @@
 🛡️ File Integrity Monitor
+<p align="center"> <img src="https://img.shields.io/badge/Python-3.8+-blue.svg" alt="Python"/> <img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License"/> <img src="https://img.shields.io/badge/Platform-Windows-lightgrey.svg" alt="Platform"/> <img src="https://img.shields.io/badge/Status-Active-brightgreen.svg" alt="Status"/> </p>
 
-File Integrity Monitor es una herramienta desarrollada en Python para la monitorización de integridad de archivos.
-Permite supervisar directorios críticos, calcular hashes SHA-256 y detectar modificaciones en tiempo real (creación, alteración o eliminación de archivos).
+📖 Descripción
 
-Este proyecto está diseñado como apoyo en entornos de ciberseguridad y auditoría, proporcionando trazabilidad y control sobre los cambios en el sistema de ficheros.
+File Integrity Monitor es una herramienta de ciberseguridad en Python que supervisa directorios críticos, calcula hashes SHA-256 y registra cambios en los archivos (añadidos, modificados o eliminados).
 
-✨ Funcionalidades principales
+Diseñada para entornos de auditoría y seguridad forense, ofrece trazabilidad completa y control de accesos por roles.
 
-Interfaz gráfica intuitiva con Tkinter.
 
-Gestión de usuarios y roles (administrador / usuario estándar).
+✨ Características
 
-Escaneo de directorios vigilados con detección de:
+✅ Interfaz gráfica en Tkinter.
 
-Archivos añadidos.
+✅ Sistema de usuarios y roles (admin / usuario).
 
-Archivos modificados.
+✅ Logs operativos e historial en JSON.
 
-Archivos eliminados.
+✅ Ejecución con permisos elevados.
 
-Historial de eventos y logs operativos almacenados en JSON.
+✅ Modo discreto en bandeja del sistema.
 
-Modo discreto mediante minimización en bandeja del sistema.
 
 📂 Estructura del proyecto
+
 📦Ciberseguridad
+
  ┣ 📜file_integrity_monitor.py   # Aplicación principal
- ┣ 📜run_integrity_monitor.bat   # Script de ejecución en Windows
- ┣ 📜file_hashes.json            # Base de datos de hashes calculados
- ┣ 📜watched_dirs.json           # Configuración de directorios vigilados
- ┣ 📜historial.json              # Historial de cambios registrados
- ┣ 📜logs.json                   # Registro de eventos operativos
- ┗ 📜users.json                  # Información de usuarios y roles
+ 
+ ┣ 📜run_integrity_monitor.bat   # Script de ejecución
+ 
+ ┣ 📜file_hashes.json            # Base de datos de hashes
+ 
+ ┣ 📜watched_dirs.json           # Directorios vigilados
+ 
+ ┣ 📜historial.json              # Historial de cambios
+ 
+ ┣ 📜logs.json                   # Logs operativos
+ 
+ ┗ 📜users.json                  # Usuarios y roles
 
-⚙️ Requisitos
 
-Python 3.8+
+⚙️ Tecnologías
+Tecnología	Uso
+Python 3.8+	Lenguaje principal
+Tkinter	Interfaz gráfica
+Pillow	Iconos en bandeja del sistema
+JSON	Persistencia de datos
 
-Dependencias:
 
-pip install pillow
+▶️ Instalación y uso
 
-▶️ Ejecución
+git clone https://github.com/Santiago-off/File-Integrity-Monitor.git
 
-Clonar el repositorio:
-
-git clone https://github.com/tuusuario/Ciberseguridad.git
 cd Ciberseguridad
 
-
-Instalar dependencias:
-
 pip install pillow
-
-
-Ejecutar el programa con permisos de administrador:
 
 run_integrity_monitor.bat
 
-📌 Nota Importante
+⚠️ Nota
 
 Este software se distribuye con fines educativos y de investigación en ciberseguridad.
-Su uso en entornos de producción requiere una revisión y adaptación previa conforme a las políticas de seguridad de cada organización.
+Su implementación en producción debe realizarse con las debidas auditorías y revisiones de seguridad.
