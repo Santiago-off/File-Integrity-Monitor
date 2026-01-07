@@ -1,64 +1,55 @@
-🛡️ File Integrity Monitor
-<p align="center"> <img src="https://img.shields.io/badge/Python-3.8+-blue.svg" alt="Python"/> <img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License"/> <img src="https://img.shields.io/badge/Platform-Windows-lightgrey.svg" alt="Platform"/> <img src="https://img.shields.io/badge/Status-Active-brightgreen.svg" alt="Status"/> </p>
+🛡️ File Integrity Monitor (FIM) - Pro Console
+<p align="center"> <img src="https://img.shields.io/badge/Python-3.8+-blue.svg" alt="Python"/> <img src="https://img.shields.io/badge/UI-Custom_Dark_Mode-blueviolet.svg" alt="UI"/> <img src="https://img.shields.io/badge/Platform-Windows-lightgrey.svg" alt="Platform"/> <img src="https://img.shields.io/badge/Security-SHA--256-red.svg" alt="Security"/> </p>
 
 📖 Descripción
+File Integrity Monitor es una solución avanzada de ciberseguridad diseñada para la vigilancia proactiva de sistemas de archivos. Utiliza criptografía SHA-256 para generar firmas digitales únicas de cada archivo, permitiendo detectar cualquier alteración, intrusión o borrado accidental en tiempo real.
 
-File Integrity Monitor es una herramienta de ciberseguridad en Python que supervisa directorios críticos, calcula hashes SHA-256 y registra cambios en los archivos (añadidos, modificados o eliminados).
+Con una interfaz inspirada en centros de operaciones de seguridad (SOC), esta herramienta es ideal para administradores de sistemas que requieren un control estricto sobre directorios críticos.
 
-Diseñada para entornos de auditoría y seguridad forense, ofrece trazabilidad completa y control de accesos por roles.
+✨ Características Premium
+🖥️ Dashboard de Alto Impacto: Interfaz profesional en modo oscuro de 1200x750px optimizada para legibilidad.
 
+🔍 Análisis Universal: Capacidad de reconocer y auditar archivos comprimidos (.rar, .zip), ejecutables, imágenes y carpetas completas.
 
-✨ Características
+📊 Identificación Detallada: Tabla de integridad que vincula cada Hash SHA-256 con su nombre de archivo correspondiente.
 
-✅ Interfaz gráfica en Tkinter.
+⚠️ Alertas Inteligentes: Notificaciones visuales intuitivas que detallan el número exacto de archivos Añadidos, Eliminados y Modificados.
 
-✅ Sistema de usuarios y roles (admin / usuario).
+👤 Control de Acceso (RBAC): Sistema de login seguro con gestión de permisos basada en roles.
 
-✅ Logs operativos e historial en JSON.
+📥 Auto-Instalador: Script .bat inteligente que configura rutas, verifica dependencias y solicita permisos de administrador automáticamente.
 
-✅ Ejecución con permisos elevados.
+📂 Estructura del Proyecto
+📦 File-Integrity-Monitor
+ ┣ 📜 file_integrity_monitor.py   # Núcleo de la aplicación (UI + Motor de Hash)
+ ┣ 📜 run_integrity_monitor.bat   # Launcher inteligente y gestor de dependencias
+ ┣ 📜 file_hashes.json            # Base de datos de firmas digitales
+ ┣ 📜 watched_dirs.json           # Registro de rutas bajo vigilancia
+ ┣ 📜 historial.json              # Registro cronológico de alertas detectadas
+ ┣ 📜 users.json                  # Credenciales cifradas y roles
+ ┗ 📜 logs.json                   # Auditoría de eventos del sistema
 
-✅ Modo discreto en bandeja del sistema.
+⚙️ Tecnologías y Requisitos
+ Tecnología,Propósito
+        Python 3.8+,Motor de ejecución principal.
+        Tkinter (Custom),Interfaz de usuario de alta fidelidad.
+        Pystray & Pillow,Gestión del icono en la bandeja del sistema (System Tray).
+        Hashlib,Generación de firmas criptográficas SHA-256.
 
+▶️ Instalación Rápida (Plug & Play)
+No necesitas configurar variables de entorno manualmente. El sistema está diseñado para ser ejecutado con un solo clic:
 
-📂 Estructura del proyecto
-
-📦Ciberseguridad
-
- ┣ 📜file_integrity_monitor.py   # Aplicación principal
- 
- ┣ 📜run_integrity_monitor.bat   # Script de ejecución
- 
- ┣ 📜file_hashes.json            # Base de datos de hashes
- 
- ┣ 📜watched_dirs.json           # Directorios vigilados
- 
- ┣ 📜historial.json              # Historial de cambios
- 
- ┣ 📜logs.json                   # Logs operativos
- 
- ┗ 📜users.json                  # Usuarios y roles
-
-
-⚙️ Tecnologías
-Tecnología	Uso
-Python 3.8+	Lenguaje principal
-Tkinter	Interfaz gráfica
-Pillow	Iconos en bandeja del sistema
-JSON	Persistencia de datos
-
-
-▶️ Instalación y uso
-
+Clonar el repositorio:
 git clone https://github.com/Santiago-off/File-Integrity-Monitor.git
+cd File-Integrity-Monitor
 
-cd Ciberseguridad
+Ejecutar: Haz clic derecho sobre run_integrity_monitor.bat y selecciona "Ejecutar como administrador".
 
-pip install pillow
+[!TIP] El script instalará automáticamente las librerías necesarias (Pillow, pystray) y configurará el usuario administrador inicial si es la primera vez que se ejecuta.
 
-run_integrity_monitor.bat
+🔐 Credenciales por Defecto
+Usuario: admin
 
-⚠️ Nota
+Contraseña: admin123
 
-Este software se distribuye con fines educativos y de investigación en ciberseguridad.
-Su implementación en producción debe realizarse con las debidas auditorías y revisiones de seguridad.
+⚠️ Nota Legal: Este software se distribuye con fines educativos y de auditoría. Asegúrese de tener autorización antes de monitorear sistemas de terceros.

@@ -2,335 +2,288 @@ import os
 import hashlib
 import json
 import tkinter as tk
-from tkinter import filedialog, messagebox, ttk, simpledialog
+from tkinter import filedialog, ttk, messagebox
 import ctypes
 import sys
-try:
-    from PIL import Image, ImageTk
-except ImportError:
-    Image = None
-    ImageTk = None
-    print("Error: Pillow no está instalado. Instala con 'pip install pillow'.")
+import threading
+from datetime import datetime
+from PIL import Image, ImageDraw
+import pystray 
 
-HISTORIAL_FILE = "historial.json"
-LOG_FILE = "logs.json"
-STATE_FILE = "file_hashes.json"
-WATCHED_DIRS_FILE = "watched_dirs.json"
-USERS_FILE = "users.json"
+# --- Configuración de Rutas ---
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
+def get_path(filename):
+    return os.path.join(BASE_DIR, filename)
+
+# --- Configuración Estética ---
+COLOR_BG = "#0f172a"
+COLOR_SIDEBAR = "#1e293b"
+COLOR_CARD = "#1e293b"
+COLOR_ACCENT = "#38bdf8"
+COLOR_TEXT = "#f8fafc"
+COLOR_TEXT_DIM = "#94a3b8"
+COLOR_SUCCESS = "#22c55e"
+COLOR_DANGER = "#ef4444"
+
+HISTORIAL_FILE = get_path("historial.json")
+LOG_FILE = get_path("logs.json")
+STATE_FILE = get_path("file_hashes.json")
+WATCHED_DIRS_FILE = get_path("watched_dirs.json")
+USERS_FILE = get_path("users.json")
+
+# --- Lógica de Seguridad ---
 def calculate_hash(filepath):
-    """Calcula el hash SHA256 de un archivo."""
     sha256 = hashlib.sha256()
-    with open(filepath, "rb") as f:
-        for chunk in iter(lambda: f.read(4096), b""):
-            sha256.update(chunk)
-    return sha256.hexdigest()
+    try:
+        with open(filepath, "rb") as f:
+            for chunk in iter(lambda: f.read(65536), b""):
+                sha256.update(chunk)
+        return sha256.hexdigest()
+    except:
+        return None
 
-def scan_directory(directory):
-    """Escanea todos los archivos en un directorio y calcula sus hashes."""
-    file_hashes = {}
-    for root, _, files in os.walk(directory):
-        for filename in files:
-            path = os.path.join(root, filename)
-            try:
-                file_hashes[path] = calculate_hash(path)
-            except Exception as e:
-                print(f"Error leyendo {path}: {e}")
-    return file_hashes
-
-def save_state(state, filename="file_hashes.json"):
-    """Guarda el estado de los hashes en un archivo JSON."""
-    with open(filename, "w") as f:
-        json.dump(state, f, indent=2)
-
-def load_state(filename="file_hashes.json"):
-    """Carga el estado de los hashes desde un archivo JSON."""
+def load_json(filename, default=[]):
     if not os.path.exists(filename):
-        return {}
+        with open(filename, "w") as f: json.dump(default, f)
+        return default
     with open(filename, "r") as f:
-        return json.load(f)
-
-def compare_states(old_state, new_state):
-    """Compara dos estados y reporta cambios."""
-    added = set(new_state) - set(old_state)
-    removed = set(old_state) - set(new_state)
-    modified = {f for f in new_state if f in old_state and new_state[f] != old_state[f]}
-    return added, removed, modified
-
-def load_json(filename):
-    if not os.path.exists(filename):
-        return []
-    with open(filename, "r") as f:
-        return json.load(f)
+        try: return json.load(f)
+        except: return default
 
 def save_json(data, filename):
     with open(filename, "w") as f:
         json.dump(data, f, indent=2)
 
-def load_users():
-    if not os.path.exists(USERS_FILE):
-        # Crear usuario administrador por defecto
-        users = [{"username": "admin", "password": "admin123", "role": "admin"}]
-        with open(USERS_FILE, "w") as f:
-            json.dump(users, f, indent=2)
-        return users
-    with open(USERS_FILE, "r") as f:
-        return json.load(f)
-
 def authenticate(username, password):
-    users = load_users()
+    users = load_json(USERS_FILE, [{"username": "admin", "password": "admin123", "role": "admin"}])
     for user in users:
         if user["username"] == username and user["password"] == password:
             return user["role"]
     return None
 
-def is_admin():
-    try:
-        return ctypes.windll.shell32.IsUserAnAdmin()
-    except:
-        return False
-
-def relaunch_as_admin():
-    if not is_admin():
-        ctypes.windll.shell32.ShellExecuteW(
-            None, "runas", sys.executable, __file__, None, 1)
-        sys.exit()
-
-class LoginWindow(tk.Toplevel):
-    def __init__(self, master):
+# --- Ventana de Alerta Intuitiva ---
+class ModernAlert(tk.Toplevel):
+    def __init__(self, master, title, message):
         super().__init__(master)
-        self.title("Inicio de sesión")
-        self.geometry("300x180")
-        self.resizable(False, False)
-        tk.Label(self, text="Usuario:").pack(pady=5)
-        self.entry_user = tk.Entry(self)
-        self.entry_user.pack()
-        tk.Label(self, text="Contraseña:").pack(pady=5)
-        self.entry_pass = tk.Entry(self, show="*")
-        self.entry_pass.pack()
-        self.btn_login = tk.Button(self, text="Entrar", command=self.try_login)
-        self.btn_login.pack(pady=10)
-        self.role = None
-        self.username = None
+        self.overrideredirect(True)
+        self.geometry("450x220")
+        self.configure(bg=COLOR_SIDEBAR)
+        
+        x = master.winfo_x() + (master.winfo_width() // 2) - 225
+        y = master.winfo_y() + (master.winfo_height() // 2) - 110
+        self.geometry(f"+{x}+{y}")
+
+        main_frame = tk.Frame(self, bg=COLOR_SIDEBAR, highlightthickness=2, highlightbackground=COLOR_ACCENT)
+        main_frame.pack(fill="both", expand=True)
+
+        tk.Label(main_frame, text="⚠️ ALERTA DE SEGURIDAD", font=("Arial", 11, "bold"), bg=COLOR_SIDEBAR, fg=COLOR_ACCENT).pack(pady=(25, 10))
+        tk.Label(main_frame, text=message, font=("Segoe UI", 10), bg=COLOR_SIDEBAR, fg=COLOR_TEXT, justify="center").pack(pady=10, padx=20)
+        
+        tk.Button(main_frame, text="ENTENDIDO", command=self.destroy, bg=COLOR_ACCENT, fg=COLOR_BG, 
+                  font=("Arial", 9, "bold"), relief="flat", padx=30, pady=8, cursor="hand2").pack(pady=15)
+
+# --- Ventana de Login ---
+class ModernLogin:
+    def __init__(self):
+        self.root = tk.Tk()
+        self.root.title("FIM - Acceso")
+        self.root.geometry("350x450")
+        self.root.configure(bg=COLOR_BG)
+        self.root.resizable(False, False)
+        
+        self.root.update_idletasks()
+        x = (self.root.winfo_screenwidth() // 2) - 175
+        y = (self.root.winfo_screenheight() // 2) - 225
+        self.root.geometry(f'+{x}+{y}')
+
+        self.auth_data = None
+
+        tk.Label(self.root, text="🛡️", font=("Arial", 50), bg=COLOR_BG, fg=COLOR_ACCENT).pack(pady=(40, 10))
+        tk.Label(self.root, text="SECURITY MONITOR", font=("Impact", 20), bg=COLOR_BG, fg=COLOR_TEXT).pack()
+        
+        tk.Label(self.root, text="Usuario", bg=COLOR_BG, fg=COLOR_TEXT_DIM, font=("Arial", 9, "bold")).pack(anchor="w", padx=50, pady=(30,0))
+        self.ent_user = tk.Entry(self.root, font=("Arial", 11), bg=COLOR_SIDEBAR, fg="white", relief="flat", bd=8, insertbackground="white")
+        self.ent_user.pack(fill="x", padx=50, pady=5)
+
+        tk.Label(self.root, text="Contraseña", bg=COLOR_BG, fg=COLOR_TEXT_DIM, font=("Arial", 9, "bold")).pack(anchor="w", padx=50, pady=(15, 0))
+        self.ent_pass = tk.Entry(self.root, font=("Arial", 11), bg=COLOR_SIDEBAR, fg="white", relief="flat", bd=8, show="*", insertbackground="white")
+        self.ent_pass.pack(fill="x", padx=50, pady=5)
+
+        tk.Button(self.root, text="ACCEDER", command=self.try_login, 
+                  bg=COLOR_ACCENT, fg=COLOR_BG, font=("Arial", 10, "bold"), 
+                  relief="flat", cursor="hand2", height=2).pack(fill="x", padx=50, pady=40)
 
     def try_login(self):
-        username = self.entry_user.get()
-        password = self.entry_pass.get()
-        role = authenticate(username, password)
+        u, p = self.ent_user.get(), self.ent_pass.get()
+        role = authenticate(u, p)
         if role:
-            self.role = role
-            self.username = username
-            self.destroy()
+            self.auth_data = (u, role)
+            self.root.destroy()
         else:
-            messagebox.showerror("Error", "Usuario o contraseña incorrectos.")
+            messagebox.showerror("Error", "Credenciales Incorrectas")
 
-class TrayIcon(tk.Toplevel):
-    def __init__(self, master, on_restore):
-        super().__init__()
-        self.on_restore = on_restore
-        self.overrideredirect(True)
-        self.geometry(f"50x50+{self.winfo_screenwidth()-60}+{self.winfo_screenheight()-70}")
-        self.attributes("-topmost", True)
-        # Emoticono simple (puedes cambiar por una imagen personalizada)
-        self.icon_img = ImageTk.PhotoImage(Image.new("RGBA", (40, 40), (255, 255, 0, 255)))
-        self.label = tk.Label(self, image=self.icon_img, cursor="hand2")
-        self.label.pack()
-        self.label.bind("<Button-1>", self.restore_app)
+    def run(self):
+        self.root.mainloop()
+        return self.auth_data
 
-    def restore_app(self, event=None):
-        self.on_restore()
-        self.destroy()
-
+# --- Aplicación Principal ---
 class FileIntegrityMonitorApp(tk.Tk):
     def __init__(self, username, role):
         super().__init__()
         self.username = username
         self.role = role
-        self.title("Monitor de Integridad de Archivos")
-        self.geometry("900x600")
+        self.title(f"FIM Console - {self.username}")
+        self.geometry("1200x750") # Tamaño incrementado
+        self.configure(bg=COLOR_BG)
         self.resizable(False, False)
+        
         self.watched_dirs = load_json(WATCHED_DIRS_FILE)
         self.historial = load_json(HISTORIAL_FILE)
-        self.logs = load_json(LOG_FILE)
-        self.state = load_state(STATE_FILE)
-        self.session_active = True
-        self.tray_icon = None
-        self.create_widgets()
+        self.state = load_json(STATE_FILE, {})
+        
+        style = ttk.Style()
+        style.theme_use("clam")
+        style.configure("Treeview", background=COLOR_CARD, foreground=COLOR_TEXT, fieldbackground=COLOR_CARD, borderwidth=0, font=("Segoe UI", 9))
+        style.configure("Treeview.Heading", background=COLOR_SIDEBAR, foreground=COLOR_ACCENT, borderwidth=0, font=("Segoe UI", 9, "bold"))
+
+        self.protocol("WM_DELETE_WINDOW", self.hide_app)
+        self.setup_ui()
         self.refresh_all()
-        self.style_widgets()
-        self.protocol("WM_DELETE_WINDOW", self.on_close)
-        self.attributes("-toolwindow", False)  # No minimizar
+        self.create_tray_icon()
 
-    def style_widgets(self):
-        self.configure(bg="#f0f4f8")
-        # ...puedes añadir más estilos visuales aquí...
+    def setup_ui(self):
+        # Sidebar
+        self.sidebar = tk.Frame(self, bg=COLOR_SIDEBAR, width=180)
+        self.sidebar.place(x=0, y=0, relheight=1)
+        tk.Label(self.sidebar, text="SYSTEM", font=("Impact", 22), bg=COLOR_SIDEBAR, fg=COLOR_ACCENT).pack(pady=40)
+        
+        btn_opts = {"bg": COLOR_SIDEBAR, "fg": COLOR_TEXT, "relief": "flat", "activebackground": COLOR_ACCENT, "font": ("Arial", 10, "bold"), "anchor": "w", "padx": 25}
+        tk.Button(self.sidebar, text="▣ PANEL", command=self.deiconify, **btn_opts).pack(fill="x", pady=5)
+        tk.Button(self.sidebar, text="▢ OCULTAR", command=self.hide_app, **btn_opts).pack(fill="x", pady=5)
+        tk.Button(self.sidebar, text="⏻ SALIR", command=self.exit_total, bg=COLOR_SIDEBAR, fg=COLOR_DANGER, relief="flat", font=("Arial", 10, "bold")).pack(side="bottom", fill="x", pady=30)
 
-    def create_widgets(self):
-        # Panel lateral
-        self.sidebar = tk.Frame(self, bg="#dbeafe", width=120, height=600)
-        self.sidebar.place(x=0, y=0)
-        btn_logout = tk.Button(self.sidebar, text="Cerrar sesión", command=self.logout, bg="#f87171", fg="white")
-        btn_logout.place(x=10, y=30, width=100, height=40)
-        btn_hide = tk.Button(self.sidebar, text="Ocultar programa", command=self.hide_app, bg="#38bdf8", fg="white")
-        btn_hide.place(x=10, y=80, width=100, height=40)
+        x_start = 200
+        # 1. Rutas Protegidas (Tarjeta Superior Izquierda)
+        self.create_card_label(x_start, 20, 350, 280, "RUTAS PROTEGIDAS")
+        self.listbox_dirs = tk.Listbox(self, bg=COLOR_CARD, fg=COLOR_TEXT, borderwidth=0, highlightthickness=1, highlightbackground=COLOR_SIDEBAR, font=("Segoe UI", 10))
+        self.listbox_dirs.place(x=x_start+10, y=55, width=330, height=180)
+        
+        tk.Button(self, text="+ AÑADIR RUTA", command=self.add_directory, bg=COLOR_ACCENT, fg=COLOR_BG, font=("Arial", 9, "bold"), relief="flat").place(x=x_start+10, y=245, width=160)
+        tk.Button(self, text="- QUITAR", command=self.remove_directory, bg=COLOR_SIDEBAR, fg=COLOR_DANGER, font=("Arial", 9, "bold"), relief="flat").place(x=x_start+180, y=245, width=160)
 
-        # Reubicar el resto de paneles
-        x_offset = 130
-        frame_dirs = tk.LabelFrame(self, text="Directorios Vigilados", padx=5, pady=5, bg="#e3eaf2")
-        frame_dirs.place(x=x_offset, y=10, width=250, height=250)
-        self.listbox_dirs = tk.Listbox(frame_dirs)
-        self.listbox_dirs.pack(fill=tk.BOTH, expand=True)
-        btn_add_dir = tk.Button(frame_dirs, text="Añadir Directorio", command=self.add_directory, state=tk.NORMAL if self.role == "admin" else tk.DISABLED)
-        btn_add_dir.pack(fill=tk.X)
-        btn_remove_dir = tk.Button(frame_dirs, text="Quitar Directorio", command=self.remove_directory, state=tk.NORMAL if self.role == "admin" else tk.DISABLED)
-        btn_remove_dir.pack(fill=tk.X)
+        # 2. Base de Datos (Tarjeta Superior Derecha - Más ancha)
+        self.create_card_label(x_start+370, 20, 610, 280, "BASE DE DATOS DE INTEGRIDAD")
+        self.tree_files = ttk.Treeview(self, columns=("file", "hash"), show="headings")
+        self.tree_files.heading("file", text="ARCHIVO / CARPETA")
+        self.tree_files.heading("hash", text="FIRMA DIGITAL SHA-256")
+        self.tree_files.column("file", width=200)
+        self.tree_files.column("hash", width=380)
+        self.tree_files.place(x=x_start+380, y=55, width=590, height=230)
 
-        frame_files = tk.LabelFrame(self, text="Archivos Vigilados", padx=5, pady=5)
-        frame_files.place(x=x_offset+260, y=10, width=300, height=250)
-        self.tree_files = ttk.Treeview(frame_files, columns=("hash"), show="headings")
-        self.tree_files.heading("hash", text="Hash")
-        self.tree_files.pack(fill=tk.BOTH, expand=True)
+        # 3. Historial (Tarjeta Inferior Derecha - Expandida para evitar cortes)
+        self.create_card_label(x_start+650, 320, 330, 340, "EVENTOS RECIENTES")
+        self.listbox_historial = tk.Listbox(self, bg=COLOR_CARD, fg=COLOR_SUCCESS, borderwidth=0, font=("Consolas", 9))
+        self.listbox_historial.place(x=x_start+660, y=355, width=310, height=290)
 
-        frame_historial = tk.LabelFrame(self, text="Historial de Cambios", padx=5, pady=5)
-        frame_historial.place(x=x_offset+570, y=10, width=310, height=250)
-        self.listbox_historial = tk.Listbox(frame_historial)
-        self.listbox_historial.pack(fill=tk.BOTH, expand=True)
+        # 4. Logs (Tarjeta Inferior Izquierda)
+        self.create_card_label(x_start, 320, 630, 340, "CONSOLA DE SISTEMA")
+        self.text_logs = tk.Text(self, state="disabled", bg="#000000", fg=COLOR_SUCCESS, font=("Consolas", 10), borderwidth=0)
+        self.text_logs.place(x=x_start+10, y=355, width=610, height=290)
 
-        frame_logs = tk.LabelFrame(self, text="Logs", padx=5, pady=5)
-        frame_logs.place(x=x_offset, y=270, width=880-x_offset, height=320)
-        self.text_logs = tk.Text(frame_logs, state="disabled")
-        self.text_logs.pack(fill=tk.BOTH, expand=True)
+        # Botón Escaneo Inferior
+        self.btn_scan = tk.Button(self, text="⚡ EJECUTAR ESCANEO DE INTEGRIDAD DEL SISTEMA", command=self.scan_all, 
+                                  bg=COLOR_SUCCESS, fg=COLOR_BG, font=("Arial", 11, "bold"), relief="flat", cursor="hand2")
+        self.btn_scan.place(x=x_start, y=685, width=980, height=45)
 
-        btn_scan = tk.Button(self, text="Escanear Cambios", command=self.scan_all)
-        btn_scan.place(x=x_offset, y=600-40, width=880-x_offset, height=30)
-        if self.role != "admin":
-            btn_scan.config(state=tk.DISABLED)
+    def create_card_label(self, x, y, w, h, title):
+        f = tk.Frame(self, bg=COLOR_SIDEBAR)
+        f.place(x=x, y=y, width=w, height=h)
+        tk.Label(f, text=title, bg=COLOR_SIDEBAR, fg=COLOR_ACCENT, font=("Arial", 9, "bold")).pack(anchor="w", padx=15, pady=8)
 
-    def refresh_all(self):
-        self.refresh_dirs()
-        self.refresh_files()
-        self.refresh_historial()
-        self.refresh_logs()
-
-    def refresh_dirs(self):
-        self.listbox_dirs.delete(0, tk.END)
-        for d in self.watched_dirs:
-            self.listbox_dirs.insert(tk.END, d)
-
-    def refresh_files(self):
-        self.tree_files.delete(*self.tree_files.get_children())
-        for d in self.watched_dirs:
-            files = scan_directory(d)
-            for f, h in files.items():
-                self.tree_files.insert("", tk.END, values=(f, h))
-
-    def refresh_historial(self):
-        self.listbox_historial.delete(0, tk.END)
-        for entry in self.historial[-20:]:
-            self.listbox_historial.insert(tk.END, entry)
-
-    def refresh_logs(self):
+    def write_log(self, message):
         self.text_logs.config(state="normal")
-        self.text_logs.delete(1.0, tk.END)
-        for log in self.logs[-50:]:
-            self.text_logs.insert(tk.END, log + "\n")
+        self.text_logs.insert(tk.END, f"[{datetime.now().strftime('%H:%M:%S')}] > {message}\n")
+        self.text_logs.see(tk.END)
         self.text_logs.config(state="disabled")
 
+    def refresh_all(self):
+        self.listbox_dirs.delete(0, tk.END)
+        for d in self.watched_dirs: self.listbox_dirs.insert(tk.END, d)
+        
+        self.tree_files.delete(*self.tree_files.get_children())
+        for f, h in self.state.items():
+            nombre_archivo = os.path.basename(f)
+            self.tree_files.insert("", tk.END, values=(nombre_archivo, h))
+            
+        self.listbox_historial.delete(0, tk.END)
+        for entry in self.historial[-20:]: self.listbox_historial.insert(tk.END, entry)
+
     def add_directory(self):
-        if self.role != "admin":
-            messagebox.showwarning("Permiso denegado", "Solo el administrador puede añadir directorios.")
-            return
-        dirpath = filedialog.askdirectory()
-        if dirpath and dirpath not in self.watched_dirs:
-            self.watched_dirs.append(dirpath)
+        path = filedialog.askdirectory()
+        if path:
+            self.watched_dirs.append(path)
             save_json(self.watched_dirs, WATCHED_DIRS_FILE)
-            self.historial.append(f"[{self.username}] Directorio añadido: {dirpath}")
-            save_json(self.historial, HISTORIAL_FILE)
             self.refresh_all()
 
     def remove_directory(self):
-        if self.role != "admin":
-            messagebox.showwarning("Permiso denegado", "Solo el administrador puede quitar directorios.")
-            return
-        selection = self.listbox_dirs.curselection()
-        if selection:
-            dirpath = self.listbox_dirs.get(selection[0])
-            self.watched_dirs.remove(dirpath)
+        sel = self.listbox_dirs.curselection()
+        if sel:
+            path = self.listbox_dirs.get(sel[0])
+            self.watched_dirs.remove(path)
             save_json(self.watched_dirs, WATCHED_DIRS_FILE)
-            self.historial.append(f"[{self.username}] Directorio eliminado: {dirpath}")
-            save_json(self.historial, HISTORIAL_FILE)
             self.refresh_all()
 
     def scan_all(self):
-        try:
-            old_state = self.state
-            new_state = {}
-            for d in self.watched_dirs:
-                new_state.update(scan_directory(d))
-            added, removed, modified = compare_states(old_state, new_state)
-            log_entry = f"[{self.username}] Escaneo realizado. Añadidos: {len(added)}, Eliminados: {len(removed)}, Modificados: {len(modified)}"
-            self.logs.append(log_entry)
-            for f in added:
-                self.logs.append(f"[{self.username}] Archivo añadido: {f}")
-            for f in removed:
-                self.logs.append(f"[{self.username}] Archivo eliminado: {f}")
-            for f in modified:
-                self.logs.append(f"[{self.username}] Archivo modificado: {f}")
-            save_json(self.logs, LOG_FILE)
-            self.historial.append(log_entry)
+        self.write_log("Iniciando análisis profundo...")
+        new_state = {}
+        for d in self.watched_dirs:
+            if not os.path.exists(d): continue
+            for root, _, files in os.walk(d):
+                for f in files:
+                    p = os.path.normpath(os.path.join(root, f))
+                    h = calculate_hash(p)
+                    if h: new_state[p] = h
+        
+        added = set(new_state) - set(self.state)
+        removed = set(self.state) - set(new_state)
+        modified = {f for f in new_state if f in self.state and new_state[f] != self.state[f]}
+
+        if added or removed or modified:
+            msg_historial = f"Cambios: {len(added)} Añadidos, {len(removed)} Eliminados, {len(modified)} Modificados"
+            self.historial.append(f"ALERTA: {msg_historial}")
             save_json(self.historial, HISTORIAL_FILE)
-            save_state(new_state, STATE_FILE)
-            self.state = new_state
-            self.refresh_all()
-            messagebox.showinfo("Escanear", log_entry)
-        except Exception as e:
-            messagebox.showerror("Error", f"Error durante el escaneo: {e}")
+            
+            res_alerta = f"Se han detectado cambios en las zonas vigiladas:\n\n"
+            res_alerta += f"• Archivos Añadidos: {len(added)}\n"
+            res_alerta += f"• Archivos Eliminados: {len(removed)}\n"
+            res_alerta += f"• Archivos Modificados: {len(modified)}"
+            
+            ModernAlert(self, "Brecha de Integridad", res_alerta)
+        
+        self.state = new_state
+        save_json(self.state, STATE_FILE)
+        self.refresh_all()
+        self.write_log("Análisis finalizado.")
 
-    def hide_app(self):
-        self.session_active = False
-        self.withdraw()
-        self.logout()
-        self.tray_icon = TrayIcon(self, self.restore_app)
+    def hide_app(self): self.withdraw()
+    def exit_total(self):
+        self.tray.stop()
+        self.destroy()
+        sys.exit()
 
-    def restore_app(self):
-        # Solicita credenciales antes de mostrar
-        username = simpledialog.askstring("Restaurar", "Usuario administrador:")
-        password = simpledialog.askstring("Restaurar", "Contraseña:", show="*")
-        role = authenticate(username, password)
-        if role == "admin":
-            self.session_active = True
-            self.deiconify()
-            self.tray_icon = None
-            self.attributes("-toolwindow", False)  # No minimizar
-        else:
-            messagebox.showerror("Permiso denegado", "Credenciales incorrectas. No se puede restaurar el programa.")
-
-    def logout(self):
-        self.session_active = False
-        messagebox.showinfo("Cerrar sesión", "Sesión cerrada. Debe iniciar sesión nuevamente.")
-        self.withdraw()
-        self.tray_icon = TrayIcon(self, self.restore_app)
-
-    def on_close(self):
-        # Solicita credenciales de administrador antes de cerrar
-        username = simpledialog.askstring("Cerrar", "Usuario administrador:")
-        password = simpledialog.askstring("Cerrar", "Contraseña:", show="*")
-        role = authenticate(username, password)
-        if role == "admin":
-            self.destroy()
-        else:
-            messagebox.showerror("Permiso denegado", "Credenciales incorrectas. No se puede cerrar el programa.")
+    def create_tray_icon(self):
+        img = Image.new('RGB', (64, 64), color=(15, 23, 42))
+        d = ImageDraw.Draw(img)
+        d.polygon([(32,10), (52,20), (52,40), (32,54), (12,40), (12,20)], fill=(56, 189, 248))
+        menu = pystray.Menu(pystray.MenuItem('Abrir Consola', lambda: self.after(0, self.deiconify)),
+                            pystray.MenuItem('Cerrar Monitor', lambda: self.after(0, self.exit_total)))
+        self.tray = pystray.Icon("FIM", img, "FIM Protección Activa", menu)
+        threading.Thread(target=self.tray.run, daemon=True).start()
 
 if __name__ == "__main__":
-    # Ejecutar como administrador
-    relaunch_as_admin()
-    # Ocultar consola: ejecuta con pythonw.exe en vez de python.exe
-    root = tk.Tk()
-    root.withdraw()
-    login = LoginWindow(root)
-    root.wait_window(login)
-    if login.role:
-        app = FileIntegrityMonitorApp(login.username, login.role)
+    login_app = ModernLogin()
+    user_info = login_app.run()
+    if user_info:
+        app = FileIntegrityMonitorApp(user_info[0], user_info[1])
         app.mainloop()
-    else:
-        messagebox.showinfo("Salir", "No se inició sesión correctamente.")
