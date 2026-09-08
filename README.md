@@ -1,55 +1,92 @@
-🛡️ File Integrity Monitor (FIM) - Pro Console
-<p align="center"> <img src="https://img.shields.io/badge/Python-3.8+-blue.svg" alt="Python"/> <img src="https://img.shields.io/badge/UI-Custom_Dark_Mode-blueviolet.svg" alt="UI"/> <img src="https://img.shields.io/badge/Platform-Windows-lightgrey.svg" alt="Platform"/> <img src="https://img.shields.io/badge/Security-SHA--256-red.svg" alt="Security"/> </p>
+# File Integrity Monitor
 
-📖 Descripción
-File Integrity Monitor es una solución avanzada de ciberseguridad diseñada para la vigilancia proactiva de sistemas de archivos. Utiliza criptografía SHA-256 para generar firmas digitales únicas de cada archivo, permitiendo detectar cualquier alteración, intrusión o borrado accidental en tiempo real.
+Aplicación de escritorio para Windows que vigila directorios: guarda el SHA-256 de cada fichero y,
+en el siguiente análisis, dice exactamente qué se ha añadido, qué ha desaparecido y qué ha
+cambiado de contenido.
 
-Con una interfaz inspirada en centros de operaciones de seguridad (SOC), esta herramienta es ideal para administradores de sistemas que requieren un control estricto sobre directorios críticos.
+Python · Tkinter · hashlib · pystray
 
-✨ Características Premium
-🖥️ Dashboard de Alto Impacto: Interfaz profesional en modo oscuro de 1200x750px optimizada para legibilidad.
+<img alt="Flujo del monitor: las rutas vigiladas se recorren con os.walk, cada fichero se resume en SHA-256 y el resultado se compara contra la línea base para clasificar los cambios" src="docs/flujo-oscuro.png">
 
-🔍 Análisis Universal: Capacidad de reconocer y auditar archivos comprimidos (.rar, .zip), ejecutables, imágenes y carpetas completas.
+> Diagrama generado con [Archify](https://github.com/tt-a1i/archify) a partir del código de este
+> repositorio. Especificación en [`docs/flujo.dataflow.json`](docs/flujo.dataflow.json);
+> versión navegable en [`docs/flujo.html`](docs/flujo.html).
 
-📊 Identificación Detallada: Tabla de integridad que vincula cada Hash SHA-256 con su nombre de archivo correspondiente.
+---
 
-⚠️ Alertas Inteligentes: Notificaciones visuales intuitivas que detallan el número exacto de archivos Añadidos, Eliminados y Modificados.
+## La idea
 
-👤 Control de Acceso (RBAC): Sistema de login seguro con gestión de permisos basada en roles.
+Un fichero puede cambiar sin que cambie su fecha, su tamaño ni su nombre. Lo único que no se puede
+falsear fácilmente es su contenido, y para eso está el hash: si un solo byte cambia, el SHA-256
+cambia entero.
 
-📥 Auto-Instalador: Script .bat inteligente que configura rutas, verifica dependencias y solicita permisos de administrador automáticamente.
+El monitor guarda una **línea base** —el hash de todo lo que hay en las rutas vigiladas— y en cada
+análisis vuelve a calcularla y compara.
 
-📂 Estructura del Proyecto
-📦 File-Integrity-Monitor
- ┣ 📜 file_integrity_monitor.py   # Núcleo de la aplicación (UI + Motor de Hash)
- ┣ 📜 run_integrity_monitor.bat   # Launcher inteligente y gestor de dependencias
- ┣ 📜 file_hashes.json            # Base de datos de firmas digitales
- ┣ 📜 watched_dirs.json           # Registro de rutas bajo vigilancia
- ┣ 📜 historial.json              # Registro cronológico de alertas detectadas
- ┣ 📜 users.json                  # Credenciales cifradas y roles
- ┗ 📜 logs.json                   # Auditoría de eventos del sistema
+## La comparación
 
-⚙️ Tecnologías y Requisitos
- Tecnología,Propósito
-        Python 3.8+,Motor de ejecución principal.
-        Tkinter (Custom),Interfaz de usuario de alta fidelidad.
-        Pystray & Pillow,Gestión del icono en la bandeja del sistema (System Tray).
-        Hashlib,Generación de firmas criptográficas SHA-256.
+Toda la lógica de detección son tres líneas de conjuntos:
 
-▶️ Instalación Rápida (Plug & Play)
-No necesitas configurar variables de entorno manualmente. El sistema está diseñado para ser ejecutado con un solo clic:
+```python
+added    = set(new_state) - set(self.state)
+removed  = set(self.state) - set(new_state)
+modified = {f for f in new_state if f in self.state and new_state[f] != self.state[f]}
+```
 
-Clonar el repositorio:
-git clone https://github.com/Santiago-off/File-Integrity-Monitor.git
-cd File-Integrity-Monitor
+- **Añadido**: la ruta está ahora y no estaba en la línea base
+- **Eliminado**: estaba en la línea base y ya no aparece
+- **Modificado**: la ruta está en las dos, pero con un hash distinto
 
-Ejecutar: Haz clic derecho sobre run_integrity_monitor.bat y selecciona "Ejecutar como administrador".
+Los dos primeros salen de restar conjuntos de claves. El tercero es el interesante: hay que
+recorrer la intersección comparando valores, porque una ruta que sigue existiendo con otro
+contenido no se detecta mirando solo los nombres.
 
-[!TIP] El script instalará automáticamente las librerías necesarias (Pillow, pystray) y configurará el usuario administrador inicial si es la primera vez que se ejecuta.
+## El hash
 
-🔐 Credenciales por Defecto
-Usuario: admin
+```python
+def calculate_hash(filepath):
+    sha256 = hashlib.sha256()
+    try:
+        with open(filepath, "rb") as f:
+            for chunk in iter(lambda: f.read(65536), b""):
+                sha256.update(chunk)
+        return sha256.hexdigest()
+    except:
+        return None
+```
 
-Contraseña: admin123
+Se lee en bloques de 64 KB en lugar de cargar el fichero entero en memoria, que es lo que permite
+analizar un ISO de varios gigas sin que el proceso se hinche. `iter(callable, centinela)` repite
+la llamada hasta que `read` devuelve `b""`, que es como Python indica el final del fichero.
 
-⚠️ Nota Legal: Este software se distribuye con fines educativos y de auditoría. Asegúrese de tener autorización antes de monitorear sistemas de terceros.
+## La interfaz
+
+Consola de escritorio en Tkinter, con tema oscuro propio. Se minimiza a la bandeja del sistema con
+`pystray`, así que puede quedarse abierta sin ocupar barra de tareas, y el análisis corre en un
+hilo aparte para que la ventana no se congele mientras recorre directorios grandes.
+
+Al detectar cambios, abre una ventana de alerta con el recuento de cada categoría.
+
+## Estado en disco
+
+Todo se guarda en JSON junto al script, sin base de datos:
+
+| Fichero | Contenido |
+|---|---|
+| `watched_dirs.json` | Rutas bajo vigilancia |
+| `file_hashes.json` | La línea base: ruta → hash |
+| `historial.json` | Alertas detectadas, en orden |
+| `logs.json` | Eventos de la aplicación |
+| `users.json` | Usuarios locales y su rol |
+
+## Puesta en marcha
+
+```bash
+pip install pillow pystray
+python file_integrity_monitor.py
+```
+
+O ejecutar `run_integrity_monitor.bat`, que comprueba las dependencias antes de arrancar.
+
+Hace falta permiso de lectura sobre los directorios que se quieran vigilar; para rutas del sistema,
+ejecutarlo como administrador.

@@ -1,0 +1,216 @@
+{
+  "schema_version": 1,
+  "diagram_type": "dataflow",
+  "meta": {
+    "title": "Monitor de integridad de ficheros",
+    "output": "flujo.html",
+    "viewBox": [
+      1068,
+      540
+    ],
+    "quality_profile": "showcase",
+    "legend": {
+      "mode": "auto",
+      "entries": {
+        "emphasis": {
+          "label": "recorrido y firma"
+        },
+        "security": {
+          "label": "comparación"
+        },
+        "dashed": {
+          "label": "actualización"
+        },
+        "database": {
+          "label": "estado en disco"
+        }
+      }
+    },
+    "views": [
+      {
+        "id": "firma",
+        "label": "Firma",
+        "focus": [
+          "dirs",
+          "walk",
+          "hash"
+        ],
+        "note": "Cada fichero de cada ruta vigilada se lee por bloques y se resume en un SHA-256."
+      },
+      {
+        "id": "comparar",
+        "label": "Comparación",
+        "focus": [
+          "hash",
+          "base",
+          "diff"
+        ],
+        "note": "El estado actual se compara contra la línea base guardada del recorrido anterior."
+      },
+      {
+        "id": "salida",
+        "label": "Resultado",
+        "focus": [
+          "diff",
+          "alerta",
+          "hist"
+        ],
+        "note": "Las diferencias se agrupan en añadidos, eliminados y modificados, y quedan registradas."
+      }
+    ]
+  },
+  "stages": [
+    {
+      "label": "Rutas"
+    },
+    {
+      "label": "Recorrido"
+    },
+    {
+      "label": "Firmas"
+    },
+    {
+      "label": "Comparación"
+    },
+    {
+      "label": "Resultado"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "dirs",
+      "type": "database",
+      "label": "watched_dirs",
+      "sublabel": "rutas",
+      "stage": 0,
+      "row": 1
+    },
+    {
+      "id": "walk",
+      "type": "backend",
+      "label": "os.walk",
+      "sublabel": "recursivo",
+      "stage": 1,
+      "row": 1
+    },
+    {
+      "id": "base",
+      "type": "database",
+      "label": "file_hashes",
+      "sublabel": "línea base",
+      "stage": 2,
+      "row": 0
+    },
+    {
+      "id": "hash",
+      "type": "backend",
+      "label": "SHA-256",
+      "sublabel": "por bloques",
+      "stage": 2,
+      "row": 1,
+      "tag": "hashlib"
+    },
+    {
+      "id": "diff",
+      "type": "security",
+      "label": "Diferencias",
+      "sublabel": "3 categorías",
+      "stage": 3,
+      "row": 1
+    },
+    {
+      "id": "alerta",
+      "type": "frontend",
+      "label": "Alerta",
+      "sublabel": "en pantalla",
+      "stage": 4,
+      "row": 0
+    },
+    {
+      "id": "hist",
+      "type": "database",
+      "label": "historial",
+      "sublabel": "cronología",
+      "stage": 4,
+      "row": 2
+    }
+  ],
+  "flows": [
+    {
+      "id": "f-dirs",
+      "from": "dirs",
+      "to": "walk",
+      "label": "rutas vigiladas",
+      "variant": "emphasis"
+    },
+    {
+      "id": "f-walk",
+      "from": "walk",
+      "to": "hash",
+      "label": "cada fichero",
+      "variant": "emphasis"
+    },
+    {
+      "id": "f-actual",
+      "from": "hash",
+      "to": "diff",
+      "label": "ahora",
+      "variant": "emphasis",
+      "route": "straight",
+      "labelAt": [
+        637,
+        300
+      ]
+    },
+    {
+      "id": "f-base",
+      "from": "base",
+      "to": "diff",
+      "label": "antes",
+      "variant": "security"
+    },
+    {
+      "id": "f-alerta",
+      "from": "diff",
+      "to": "alerta",
+      "label": "qué ha cambiado",
+      "variant": "security"
+    },
+    {
+      "id": "f-hist",
+      "from": "diff",
+      "to": "hist",
+      "label": "queda registrado",
+      "variant": "emphasis"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "La línea base",
+      "items": [
+        "SHA-256 de cada fichero, leído en bloques de 64 KB",
+        "La línea base vive en file_hashes.json",
+        "Al terminar el análisis, el estado actual la sustituye"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Tres categorías",
+      "items": [
+        "Añadido: está ahora y no estaba antes",
+        "Eliminado: estaba antes y ya no está",
+        "Modificado: mismo nombre, firma distinta"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "La aplicación",
+      "items": [
+        "Interfaz de escritorio en Tkinter",
+        "Icono en la bandeja del sistema con pystray",
+        "Todo el estado en ficheros JSON junto al script"
+      ]
+    }
+  ]
+}
